@@ -8,6 +8,7 @@ from datetime import datetime
 from time import sleep
 from  ipv_data_source import ipv_data_source as device
 import os
+import requests
 
 class plot_vital_signs:
 	
@@ -46,34 +47,68 @@ class plot_vital_signs:
 		plt.title(title, fontsize=12, fontweight='bold')
 		
 	
-	def write_vital_signs_to_file(self, patient_name="", patient_id="", heart_rate=0, oxygen=0, bp_sys=0, bp_dias=0, timestamp=None):
-		"""Write vital signs data to text file when BP is captured"""
+	def send_vital_signs_to_api(self, patient_name="", patient_id="", heart_rate=0, oxygen=0, bp_sys=0, bp_dias=0, timestamp=None):
+		"""Send vital signs data to SmartWard API when BP is captured"""
 		try:
-			filename = "vital_signs.txt"
+			# API endpoint
+			api_url = "http://localhost:8000/api/integration/vital-signs/mp5sc"
 			
 			# Format timestamp
 			if timestamp is None:
 				timestamp = datetime.now()
-			timestamp_str = timestamp.strftime('%d.%m.%Y %H:%M:%S')
+			timestamp_str = timestamp.strftime('%Y-%m-%d %H:%M:%S')
 			
 			# Clean up patient data - remove extra spaces between characters
 			patient_name = ' '.join(patient_name.split())
 			patient_id = ' '.join(patient_id.split())
 			
-			# Format vital signs (values are already validated before being passed in)
-			heart_rate_str = f"{heart_rate:.0f} bpm" if heart_rate > 0 else "N/A"
-			oxygen_str = f"{oxygen:.1f}%" if oxygen > 0 else "N/A"
+			# Prepare API payload
+			payload = {
+				"mrn": patient_id,  # Required field
+			}
 			
-			# Prepare the data line
-			data_line = f"{timestamp_str} | Patient: {patient_name} | ID: {patient_id} | Heart Rate: {heart_rate_str} | Oxygen: {oxygen_str} | BP: {bp_sys:.0f}/{bp_dias:.0f} mmHg\n"
+			# Add optional fields only if they have valid values
+			if patient_name:
+				payload["patient_name"] = patient_name
 			
-			# Write to file (append mode)
-			with open(filename, 'a') as f:
-				f.write(data_line)
+			if heart_rate > 0 and heart_rate < 300:
+				payload["pulse_rate"] = int(heart_rate)
 			
-			print(f"Vital signs recorded: {patient_name} ({patient_id}) - HR: {heart_rate_str}, O2: {oxygen_str}, BP: {bp_sys:.0f}/{bp_dias:.0f}")
+			if oxygen > 0 and oxygen <= 100:
+				payload["spo2"] = round(oxygen, 1)
+			
+			if bp_sys > 0 and bp_sys < 300:
+				payload["systolic_bp"] = int(bp_sys)
+			
+			if bp_dias > 0 and bp_dias < 300:
+				payload["diastolic_bp"] = int(bp_dias)
+			
+			# Add device timestamp
+			payload["device_timestamp"] = timestamp_str
+			
+			# Set headers
+			headers = {
+				"Content-Type": "application/json",
+				"Accept": "application/json"
+			}
+			
+			# Send POST request to API
+			response = requests.post(api_url, json=payload, headers=headers, timeout=5)
+			
+			# Check response
+			if response.status_code == 201:
+				response_data = response.json()
+				print(f"✓ Vital signs sent successfully: {patient_name} ({patient_id}) - HR: {heart_rate:.0f}, O2: {oxygen:.1f}%, BP: {bp_sys:.0f}/{bp_dias:.0f}")
+				print(f"  API Response: {response_data.get('message', 'Success')}")
+			else:
+				print(f"✗ API Error ({response.status_code}): {response.text}")
+				
+		except requests.exceptions.ConnectionError:
+			print(f"✗ Connection Error: Cannot reach SmartWard API at {api_url}")
+		except requests.exceptions.Timeout:
+			print(f"✗ Timeout Error: SmartWard API did not respond in time")
 		except Exception as e:
-			print(f"Error writing to vital signs file: {e}")
+			print(f"✗ Error sending vital signs to API: {e}")
 	
 	def plot_new_values(self, time_stamp, RRsys=0, RRdias=0, Pulse=0, SaO2=0):
 		if(((RRsys > 0)and(RRdias > 0))and((RRsys < 300)and(RRdias < 300))):
@@ -187,9 +222,9 @@ try:
 			# Plot the BP data
 			plot_v.plot_new_values(calc_time, RRsys=bp_sys, RRdias=bp_dias)
 			
-			# Write all vital signs to file (BP capture acts as trigger)
+			# Send all vital signs to SmartWard API (BP capture acts as trigger)
 			try:
-				plot_v.write_vital_signs_to_file(
+				plot_v.send_vital_signs_to_api(
 					patient_name=full_name,
 					patient_id=patient_id,
 					heart_rate=last_valid_heart_rate,
@@ -199,7 +234,7 @@ try:
 					timestamp=v
 				)
 			except Exception as e:
-				print(f"Warning: Could not write vital signs to file: {e}")
+				print(f"Warning: Could not send vital signs to API: {e}")
 			
 			last_NBP_time=v
 		plt.pause(2)

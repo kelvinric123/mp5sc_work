@@ -53,6 +53,7 @@ class ipv_data_source:
 		
 		self.p_press_art=0
 		self.p_temp=0
+		self.p_resp_rate=0
 		
 		self.p_timestamp=0.0
 		
@@ -172,7 +173,8 @@ class ipv_data_source:
 		ret_val.append(["Connection start: time", temp_time])
 		
 		#ret_val.append(["ART_press", self.p_press_art])
-		#ret_val.append(["Temp", self.p_temp])
+		ret_val.append(["Temp", self.p_temp])
+		ret_val.append(["Resp_rate", self.p_resp_rate])
 		
 		return ret_val
 		
@@ -304,6 +306,14 @@ class ipv_data_source:
 		#temp: 19272
 		#bis: 61518
 		
+		# Debug: log unknown physio IDs to help identify temp/RR
+		if self.debug_info:
+			known_ids = [18949, 18950, 18951, 61669, 19384, 18466, 16770, 18963, 
+			             19272, 19296, 19328, 19360, 20490, 20498, 20514, 20482, 151562,
+			             61639, 63528]  # Added MP5-specific temp and RR IDs
+			if p_id not in known_ids and observ_val != 0:
+				print(f"[DEBUG] Unknown physio ID: {p_id} = {observ_val}")
+		
 		#NBP
 		if p_id==18949:
 			self.p_nbp_sys=observ_val
@@ -325,9 +335,18 @@ class ipv_data_source:
 		#art_press (or 18967 ???)
 		if p_id==18963:
 			self.p_press_art=observ_val
-		#temp
-		if p_id==19272:
+		#temp (various IDs depending on probe type)
+		# 19272=MDC_TEMP, 19296=MDC_TEMP_BODY, 19328=MDC_TEMP_SKIN, 19360=MDC_TEMP_TYMP
+		# 19330=MDC_TEMP_RECT, 19298=MDC_TEMP_CORE, 19394=MDC_TEMP_ESOPH
+		# 61639=Philips MP5 temperature
+		if p_id in [19272, 19296, 19328, 19360, 19330, 19298, 19394, 188420, 61639]:
 			self.p_temp=observ_val
+		#respiratory rate (various IDs depending on source)
+		# 20490=MDC_RESP_RATE, 20498=MDC_AWAY_RESP_RATE, 20514=MDC_CO2_RESP_RATE
+		# 20482=MDC_RESP, 151562=pleth-derived, 20480=impedance
+		# 63528=Philips MP5 respiratory rate
+		if p_id in [20490, 20498, 20514, 20482, 151562, 20480, 53250, 63528]:
+			self.p_resp_rate=observ_val
 	
 	def check_id(self, objid, b, handle_id=0):
 		#handel management for assigning timestamps to measurements
@@ -841,4 +860,4 @@ class ipv_data_source:
 			if self.debug_info:
 				print("[exit]...<OK>")
 			self.is_active=False
-return -1
+			return -1
