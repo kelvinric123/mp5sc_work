@@ -35,6 +35,8 @@ class VitalSignListener:
         self.poll_interval = int(os.getenv('POLL_INTERVAL', '2'))
         self.refresh_interval = int(os.getenv('REFRESH_INTERVAL', '10'))
         self.debug_mode = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
+        self.max_connection_errors = int(os.getenv('MAX_CONNECTION_ERRORS', '3'))
+        self.reconnect_delay = int(os.getenv('RECONNECT_DELAY', '10'))
         
         # Track patient info
         self.last_patient_name = ""
@@ -128,8 +130,21 @@ class VitalSignListener:
             self.log(f"✗ Error sending vital signs: {e}", "ERROR")
             return False
     
+    def connect_device(self):
+        """Connect to the device with error handling"""
+        dev = device(self.monitor_ip)
+        
+        # Enable device debug mode if debug is enabled
+        if self.debug_mode:
+            dev.debug_info = True
+        
+        dev.start_client()
+        dev.start_watchdog()
+        
+        return dev
+    
     def run(self):
-        """Main loop to listen for vital signs and send to API"""
+        """Main loop to listen for vital signs and send to API with auto-reconnect"""
         self.log("=" * 60)
         self.log("Vital Sign Listener Starting...")
         self.log(f"Monitor IP: {self.monitor_ip}")
@@ -145,28 +160,56 @@ class VitalSignListener:
         if not self.api_passphrase:
             self.log("WARNING: No API passphrase configured", "WARNING")
         
-        # Initialize device connection
-        self.log(f"Connecting to monitor at {self.monitor_ip}...")
-        dev = device(self.monitor_ip)
-        
-        # Enable device debug mode if debug is enabled
-        if self.debug_mode:
-            dev.debug_info = True
-        
-        dev.start_client()
-        dev.start_watchdog()
-        
-        self.log("✓ Device connection started")
-        
-        # Initialize tracking variables
-        last_vital_time = 0
-        last_NBP_time = datetime.strptime("01.01.1990 00:00:00", '%d.%m.%Y %H:%M:%S')
-        refresh_counter = 0
-        
+        # Main connection loop with auto-reconnect
+        while True:
+            try:
+                # Initialize device connection
+                self.log(f"Connecting to monitor at {self.monitor_ip}...")
+                dev = self.connect_device()
+                self.log("✓ Device connection started")
+                
+                # Initialize tracking variables
+                last_vital_time = 0
+                last_NBP_time = datetime.strptime("01.01.1990 00:00:00", '%d.%m.%Y %H:%M:%S')
+                refresh_counter = 0
+                connection_error_count = 0
+                
+                # Data collection loop
+                self._data_collection_loop(dev, last_vital_time, last_NBP_time, refresh_counter, connection_error_count)
+                
+            except KeyboardInterrupt:
+                self.log("Shutdown requested by user...")
+                try:
+                    dev.halt_client()
+                    self.log("Client halted")
+                except:
+                    pass
+                self.log("Exit...[OK]")
+                break
+                
+            except Exception as e:
+                self.log(f"Connection error: {e}", "ERROR")
+                try:
+                    dev.halt_client()
+                except:
+                    pass
+                self.log(f"Reconnecting in {self.reconnect_delay} seconds...", "WARNING")
+                time.sleep(self.reconnect_delay)
+    
+    def _data_collection_loop(self, dev, last_vital_time, last_NBP_time, refresh_counter, connection_error_count):
+        """Inner loop for data collection"""
         try:
             while True:
+                # Check if device is still active
+                if not dev.is_active:
+                    self.log("Device connection lost - will reconnect", "WARNING")
+                    raise ConnectionError("Device connection inactive")
+                
                 # Get vital signs from device
                 temp_l = dev.get_vital_signs()
+                
+                # Reset error counter on successful data retrieval
+                connection_error_count = 0
                 
                 # Periodically request patient data updates
                 refresh_counter += 1
@@ -273,14 +316,10 @@ class VitalSignListener:
                 # Wait before next poll
                 time.sleep(self.poll_interval)
                 
-        except KeyboardInterrupt:
-            self.log("Shutdown requested by user...")
         except Exception as e:
-            self.log(f"Error in main loop: {e}", "ERROR")
-        finally:
-            dev.halt_client()
-            self.log("Client halted")
-            self.log("Exit...[OK]")
+            # Log the error and let it bubble up to trigger reconnect
+            self.log(f"Error in data collection: {e}", "ERROR")
+            raise
 
 
 def main():
