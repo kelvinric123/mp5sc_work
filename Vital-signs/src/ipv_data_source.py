@@ -310,7 +310,9 @@ class ipv_data_source:
 		if self.debug_info:
 			known_ids = [18949, 18950, 18951, 61669, 19384, 18466, 16770, 18963, 
 			             19272, 19296, 19328, 19360, 20490, 20498, 20514, 20482, 151562,
-			             61639, 63528]  # Added MP5-specific temp and RR IDs
+			             61639, 63528,  # Added MP5-specific temp and RR IDs
+			             61665, 61666, 61667, 61668, 57344, 57346, 188452,  # Probe temp IDs
+			             19330, 19298, 19394, 188420, 20480, 53250]  # Additional temp/RR IDs
 			if p_id not in known_ids and observ_val != 0:
 				print(f"[DEBUG] Unknown physio ID: {p_id} = {observ_val}")
 		
@@ -339,7 +341,11 @@ class ipv_data_source:
 		# 19272=MDC_TEMP, 19296=MDC_TEMP_BODY, 19328=MDC_TEMP_SKIN, 19360=MDC_TEMP_TYMP
 		# 19330=MDC_TEMP_RECT, 19298=MDC_TEMP_CORE, 19394=MDC_TEMP_ESOPH
 		# 61639=Philips MP5 temperature
-		if p_id in [19272, 19296, 19328, 19360, 19330, 19298, 19394, 188420, 61639]:
+		# Probe temperature IDs:
+		# 61665=T1 (probe 1), 61666=T2 (probe 2), 61667=T3, 61668=T4
+		# 57344, 57346=Philips temp probe codes, 188452=temp probe differential
+		if p_id in [19272, 19296, 19328, 19360, 19330, 19298, 19394, 188420, 61639,
+		            61665, 61666, 61667, 61668, 57344, 57346, 188452]:
 			self.p_temp=observ_val
 		#respiratory rate (various IDs depending on source)
 		# 20490=MDC_RESP_RATE, 20498=MDC_AWAY_RESP_RATE, 20514=MDC_CO2_RESP_RATE
