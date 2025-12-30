@@ -344,9 +344,10 @@ class ipv_data_source:
 		# Probe temperature IDs:
 		# 61665=T1 (probe 1), 61666=T2 (probe 2), 61667=T3, 61668=T4
 		# 57344, 57346=Philips temp probe codes, 188452=temp probe differential
+		# 64530=Temperature probe (discovered via debug 2024-12-30)
 		if p_id in [19272, 19296, 19328, 19360, 19330, 19298, 19394, 188420, 61639,
-		            61665, 61666, 61667, 61668, 57344, 57346, 188452]:
-			self.p_temp=observ_val
+		            61665, 61666, 61667, 61668, 57344, 57346, 188452, 64530]:
+			self.p_temp=round(observ_val, 1)  # Round to 1 decimal place
 		#respiratory rate (various IDs depending on source)
 		# 20490=MDC_RESP_RATE, 20498=MDC_AWAY_RESP_RATE, 20514=MDC_CO2_RESP_RATE
 		# 20482=MDC_RESP, 151562=pleth-derived, 20480=impedance
