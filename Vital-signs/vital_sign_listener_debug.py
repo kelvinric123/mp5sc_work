@@ -352,6 +352,11 @@ class VitalSignListenerDebug:
                     calc_time = float((v - w).total_seconds()) / 60
                     bp_sys = float(temp_l[0][1])
                     bp_dias = float(temp_l[1][1])
+
+                    # Ignore invalid BP readings (systolic < 10)
+                    if bp_sys < 10:
+                        last_NBP_time = v
+                        continue
                     
                     patient_info = f"{full_name} ({patient_id})" if full_name else f"ID: {patient_id}"
                     vitals_str = f"BP: {bp_sys:.0f}/{bp_dias:.0f}, HR: {self.last_valid_heart_rate:.0f}, O2: {self.last_valid_oxygen:.1f}"

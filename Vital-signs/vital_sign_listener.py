@@ -11,6 +11,7 @@ import os
 import sys
 import time
 import requests
+import subprocess
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -52,6 +53,17 @@ class VitalSignListener:
         """Print log message with timestamp"""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         print(f"[{timestamp}] [{level}] {message}")
+
+    def play_voice_alert(self, message):
+        """Play a voice alert using espeak"""
+        try:
+            # Use espeak for TTS - non-blocking
+            subprocess.Popen(['espeak', message], 
+                           stdout=subprocess.DEVNULL, 
+                           stderr=subprocess.DEVNULL)
+        except Exception as e:
+            # Just log error but don't crash if espeak is missing (e.g. on Windows/Dev)
+            self.log(f"Audio alert failed (espeak missing?): {e}", "DEBUG")
     
     def send_vital_signs(self, patient_name="", patient_id="", heart_rate=0, oxygen=0, 
                          bp_sys=0, bp_dias=0, temperature=0, resp_rate=0, timestamp=None):
@@ -285,6 +297,11 @@ class VitalSignListener:
                     calc_time = float((v - w).total_seconds()) / 60
                     bp_sys = float(temp_l[0][1])
                     bp_dias = float(temp_l[1][1])
+
+                    # Ignore invalid BP readings (systolic < 10)
+                    if bp_sys < 10:
+                        last_NBP_time = v
+                        continue
                     
                     patient_info = f"{full_name} ({patient_id})" if full_name else f"ID: {patient_id}"
                     vitals_str = f"BP: {bp_sys:.0f}/{bp_dias:.0f}, HR: {self.last_valid_heart_rate:.0f}, O2: {self.last_valid_oxygen:.1f}"
@@ -297,7 +314,7 @@ class VitalSignListener:
                     # Send vital signs to API (BP capture acts as trigger)
                     # Only send if we have a patient ID (required by API)
                     if patient_id:
-                        self.send_vital_signs(
+                        success = self.send_vital_signs(
                             patient_name=full_name,
                             patient_id=patient_id,
                             heart_rate=self.last_valid_heart_rate,
@@ -308,8 +325,14 @@ class VitalSignListener:
                             resp_rate=self.last_valid_resp_rate,
                             timestamp=v
                         )
+                        
+                        if success:
+                            self.play_voice_alert("successfully sent")
+                        else:
+                            self.play_voice_alert("failed")
                     else:
                         self.log("✗ Cannot send vital signs: No patient ID available", "WARNING")
+                        self.play_voice_alert("failed")
                     
                     last_NBP_time = v
                 
