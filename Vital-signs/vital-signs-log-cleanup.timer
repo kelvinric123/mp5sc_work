@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Log Cleanup Timer for Vital Signs
+Requires=vital-signs-log-cleanup.service
+
+[Timer]
+# Run daily at 6:00 AM (configurable in .env as LOG_CLEANUP_TIME)
+OnCalendar=*-*-* 06:00:00
+# Ensure the job runs even if the system was off at scheduled time
+Persistent=true
+
+[Install]
+WantedBy=timers.target

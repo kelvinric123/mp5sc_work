@@ -1,0 +1,13 @@
+[Unit]
+Description=Vital Signs Log Cleanup Service
+After=network.target
+
+[Service]
+Type=oneshot
+User=qmed
+Group=qmed
+WorkingDirectory=/home/qmed/qmed/mp5sc_work/Vital-signs
+ExecStart=/home/qmed/qmed/mp5sc_work/Vital-signs/cleanup_logs.sh
+
+[Install]
+WantedBy=multi-user.target
